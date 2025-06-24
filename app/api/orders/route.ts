@@ -64,11 +64,17 @@ export async function GET(request: NextRequest) {
 
 // POST - Crear nuevo pedido
 export async function POST(request: NextRequest) {
+  let connection
   try {
     const body = await request.json()
     const { product, quantity, priority, client, notes } = body
 
-    const connection = await getConnection()
+    console.log("Creando pedido:", { product, quantity, priority, client, notes })
+
+    connection = await getConnection()
+
+    // Iniciar transacción
+    await connection.beginTransaction()
 
     // Generar nuevo ID
     const [maxIdResult] = (await connection.execute(
@@ -78,17 +84,24 @@ export async function POST(request: NextRequest) {
     const maxId = maxIdResult[0]?.max_id || 1000
     const newId = `P${maxId + 1}`
 
+    console.log("Nuevo ID generado:", newId)
+
     // Buscar cliente por nombre (o crear uno nuevo si no existe)
     const [clientResult] = (await connection.execute("SELECT id FROM clientes WHERE nombre = ?", [client])) as any
 
     let clientId
     if (clientResult.length === 0) {
-      // Crear nuevo cliente
-      const [insertResult] = (await connection.execute("INSERT INTO clientes (nombre) VALUES (?)", [client])) as any
+      console.log("Creando nuevo cliente:", client)
+      const [insertResult] = (await connection.execute(
+        "INSERT INTO clientes (nombre, email, telefono) VALUES (?, ?, ?)",
+        [client, `${client.toLowerCase().replace(/\s+/g, "")}@email.com`, "000-000-0000"],
+      )) as any
       clientId = insertResult.insertId
     } else {
       clientId = clientResult[0].id
     }
+
+    console.log("Cliente ID:", clientId)
 
     // Buscar producto por nombre (o crear uno nuevo si no existe)
     const [productResult] = (await connection.execute("SELECT id, precio_base FROM productos WHERE nombre = ?", [
@@ -97,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     let productId, precioBase
     if (productResult.length === 0) {
-      // Crear nuevo producto básico
+      console.log("Creando nuevo producto:", product)
       const categoria = product.toLowerCase().includes("zapato")
         ? "zapato"
         : product.toLowerCase().includes("botin")
@@ -107,8 +120,8 @@ export async function POST(request: NextRequest) {
             : "zapato"
 
       const [insertResult] = (await connection.execute(
-        "INSERT INTO productos (nombre, categoria, precio_base) VALUES (?, ?, ?)",
-        [product, categoria, 100000], // Precio base por defecto
+        "INSERT INTO productos (nombre, categoria, precio_base, descripcion) VALUES (?, ?, ?, ?)",
+        [product, categoria, 100000, `Producto ${product} creado automáticamente`],
       )) as any
       productId = insertResult.insertId
       precioBase = 100000
@@ -116,6 +129,8 @@ export async function POST(request: NextRequest) {
       productId = productResult[0].id
       precioBase = productResult[0].precio_base
     }
+
+    console.log("Producto ID:", productId)
 
     const precioTotal = precioBase * quantity
     const fechaEntrega = new Date()
@@ -137,10 +152,12 @@ export async function POST(request: NextRequest) {
         "En cola",
         priority,
         precioTotal,
-        notes,
+        notes || "Pedido creado desde el sistema",
         fechaEntrega.toISOString().split("T")[0],
       ],
     )
+
+    console.log("Pedido insertado:", newId)
 
     // Registrar en historial
     await connection.execute(
@@ -151,7 +168,13 @@ export async function POST(request: NextRequest) {
       [newId, "En cola", 1, "Pedido creado desde el sistema"],
     )
 
+    console.log("Historial registrado")
+
+    // Confirmar transacción
+    await connection.commit()
     await connection.end()
+
+    console.log("Pedido creado exitosamente:", newId)
 
     return NextResponse.json({
       success: true,
@@ -159,6 +182,17 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error creando pedido:", error)
+
+    // Rollback en caso de error
+    if (connection) {
+      try {
+        await connection.rollback()
+        await connection.end()
+      } catch (rollbackError) {
+        console.error("Error en rollback:", rollbackError)
+      }
+    }
+
     return NextResponse.json({ success: false, error: "Error creando pedido" }, { status: 500 })
   }
 }

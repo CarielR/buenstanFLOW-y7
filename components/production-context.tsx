@@ -95,6 +95,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
   const [statusHistory, setStatusHistory] = useState<StatusChange[]>([])
   const [orderSupplies, setOrderSupplies] = useState<OrderSupplies[]>([])
   const [supplyConsumptions, setSupplyConsumptions] = useState<SupplyConsumption[]>([])
+  const [loadedSupplies, setLoadedSupplies] = useState<Set<string>>(new Set()) // Track loaded supplies
   const [kpis, setKpis] = useState({
     totalInQueue: 0,
     inProcess: 0,
@@ -109,6 +110,8 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
 
   const refreshData = useCallback(async () => {
     try {
+      console.log("Cargando datos del sistema...")
+
       // Cargar pedidos
       const ordersData = await db.getOrders()
       const transformedOrders = ordersData.map((order: any) => ({
@@ -124,6 +127,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
         producto_nombre: order.producto_nombre,
       }))
       setOrders(transformedOrders)
+      console.log(`Cargados ${transformedOrders.length} pedidos`)
 
       // Cargar historial completo
       const historyData = await db.getAllHistory()
@@ -148,26 +152,47 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
       })
     } catch (error) {
       console.error("Error cargando datos:", error)
+      toast({
+        title: "Error de conexión",
+        description: "No se pudieron cargar los datos del sistema",
+        variant: "destructive",
+      })
     }
-  }, [db])
+  }, [db, toast])
 
-  const loadSuppliesForOrderMemo = useCallback(
+  const loadSuppliesForOrder = useCallback(
     async (orderId: string) => {
-      if (!orderId) return
+      if (!orderId) {
+        console.log("No se puede cargar insumos: orderId vacío")
+        return
+      }
+
+      // Verificar si ya están cargados
+      if (loadedSupplies.has(orderId)) {
+        console.log(`Insumos para pedido ${orderId} ya están cargados`)
+        return
+      }
 
       try {
+        console.log(`Cargando insumos para pedido ${orderId}...`)
+
         const suppliesData = await db.getSupplies(orderId)
+
+        if (!suppliesData || !suppliesData.supplies) {
+          console.log(`No se encontraron insumos para pedido ${orderId}`)
+          return
+        }
 
         const transformedSupplies: OrderSupplies = {
           orderId: suppliesData.orderId,
           supplies: suppliesData.supplies.map((supply: any) => ({
             id: supply.id.toString(),
             name: supply.name,
-            required: Number.parseFloat(supply.required),
-            available: Number.parseFloat(supply.available),
-            used: Number.parseFloat(supply.used || 0),
-            unit: supply.unit,
-            originalAvailable: Number.parseFloat(supply.originalAvailable),
+            required: Number.parseFloat(supply.required) || 0,
+            available: Number.parseFloat(supply.available) || 0,
+            used: Number.parseFloat(supply.used) || 0,
+            unit: supply.unit || "u",
+            originalAvailable: Number.parseFloat(supply.originalAvailable) || 0,
           })),
         }
 
@@ -176,13 +201,16 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
           return [...filtered, transformedSupplies]
         })
 
+        // Marcar como cargado
+        setLoadedSupplies((prev) => new Set([...prev, orderId]))
+
         // Cargar historial de consumos
         const consumptionsData = await db.getSupplyHistory(orderId)
         const transformedConsumptions = consumptionsData.map((item: any) => ({
           id: item.id.toString(),
           orderId: item.orderId,
           supplyId: item.supplyId.toString(),
-          consumed: Number.parseFloat(item.consumed),
+          consumed: Number.parseFloat(item.consumed) || 0,
           timestamp: new Date(item.timestamp),
           user: item.user || "Usuario",
           supply_name: item.supply_name,
@@ -193,14 +221,19 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
           const filtered = prev.filter((sc) => sc.orderId !== orderId)
           return [...filtered, ...transformedConsumptions]
         })
+
+        console.log(`Insumos cargados exitosamente para pedido ${orderId}`)
       } catch (error) {
-        console.error("Error cargando insumos:", error)
+        console.error(`Error cargando insumos para pedido ${orderId}:`, error)
+        toast({
+          title: "Error cargando insumos",
+          description: `No se pudieron cargar los insumos para el pedido ${orderId}`,
+          variant: "destructive",
+        })
       }
     },
-    [db],
+    [db, loadedSupplies, toast],
   )
-
-  const loadSuppliesForOrder = loadSuppliesForOrderMemo
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
@@ -229,15 +262,26 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
     notes?: string
   }) => {
     try {
-      await db.createOrder(orderData)
+      console.log("Creando nuevo pedido:", orderData)
+
+      const result = await db.createOrder(orderData)
+
+      // Limpiar cache de insumos cargados para forzar recarga
+      setLoadedSupplies(new Set())
+
       await refreshData()
 
       toast({
         title: "Pedido creado",
-        description: "Pedido creado exitosamente",
+        description: `Pedido ${result.id} creado exitosamente`,
       })
     } catch (error) {
       console.error("Error creando pedido:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo crear el pedido",
+        variant: "destructive",
+      })
     }
   }
 
@@ -276,6 +320,13 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
       }
 
       await db.consumeSupplies(orderId, consumptions)
+
+      // Marcar como no cargado para forzar recarga
+      setLoadedSupplies((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(orderId)
+        return newSet
+      })
 
       // Recargar insumos para este pedido
       await loadSuppliesForOrder(orderId)
