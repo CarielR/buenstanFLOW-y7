@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { useDatabase } from "@/hooks/use-database"
 
 export type OrderStatus = "En cola" | "En proceso" | "Finalizado"
 
@@ -15,6 +16,8 @@ export interface Order {
   client: string
   createdAt: Date
   updatedAt: Date
+  cliente_nombre?: string
+  producto_nombre?: string
 }
 
 export interface StatusChange {
@@ -49,6 +52,8 @@ export interface SupplyConsumption {
   consumed: number
   timestamp: Date
   user: string
+  supply_name?: string
+  unidad_medida?: string
 }
 
 interface ProductionContextType {
@@ -56,16 +61,17 @@ interface ProductionContextType {
   statusHistory: StatusChange[]
   orderSupplies: OrderSupplies[]
   supplyConsumptions: SupplyConsumption[]
-  updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void
+  loading: boolean
+  updateOrderStatus: (orderId: string, newStatus: OrderStatus) => Promise<void>
   updateSupplyUsage: (orderId: string, supplyId: string, used: number) => void
-  saveSupplyUsage: (orderId: string) => void
+  saveSupplyUsage: (orderId: string) => Promise<void>
   addNewOrder: (orderData: {
     product: string
     quantity: number
     priority: "Alta" | "Media" | "Baja"
     client: string
     notes?: string
-  }) => void
+  }) => Promise<void>
   getSupplyConsumptions: (orderId: string) => SupplyConsumption[]
   getOrderStatusHistory: (orderId: string) => StatusChange[]
   getAllStatusHistory: () => StatusChange[]
@@ -75,378 +81,157 @@ interface ProductionContextType {
     finishedToday: number
     averageTime: number
   }
+  refreshData: () => Promise<void>
+  loadSuppliesForOrder: (orderId: string) => Promise<void>
 }
 
 const ProductionContext = createContext<ProductionContextType | undefined>(undefined)
 
 export function ProductionProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast()
+  const db = useDatabase()
 
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: "P1023",
-      product: "Zapato A",
-      quantity: 50,
-      status: "En cola",
-      priority: "Alta",
-      client: "Cliente ABC",
-      createdAt: new Date("2025-06-22T08:00:00"),
-      updatedAt: new Date("2025-06-22T08:00:00"),
-    },
-    {
-      id: "P1024",
-      product: "Botín B",
-      quantity: 30,
-      status: "En proceso",
-      priority: "Media",
-      client: "Cliente XYZ",
-      createdAt: new Date("2025-06-21T10:00:00"),
-      updatedAt: new Date("2025-06-22T14:30:00"),
-    },
-    {
-      id: "P1025",
-      product: "Sandalia C",
-      quantity: 25,
-      status: "Finalizado",
-      priority: "Baja",
-      client: "Cliente DEF",
-      createdAt: new Date("2025-06-22T06:00:00"),
-      updatedAt: new Date("2025-06-22T16:00:00"),
-    },
-    {
-      id: "P1026",
-      product: "Zapato D",
-      quantity: 40,
-      status: "En cola",
-      priority: "Media",
-      client: "Cliente GHI",
-      createdAt: new Date("2025-06-22T09:00:00"),
-      updatedAt: new Date("2025-06-22T09:00:00"),
-    },
-    {
-      id: "P1027",
-      product: "Botín E",
-      quantity: 35,
-      status: "En proceso",
-      priority: "Alta",
-      client: "Cliente JKL",
-      createdAt: new Date("2025-06-21T15:00:00"),
-      updatedAt: new Date("2025-06-22T13:00:00"),
-    },
-  ])
-
-  const [statusHistory, setStatusHistory] = useState<StatusChange[]>([
-    // P1023 - Zapato A
-    {
-      id: "1",
-      orderId: "P1023",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-22T08:00:00"),
-      notes: "Pedido creado",
-    },
-    // P1024 - Botín B
-    {
-      id: "2",
-      orderId: "P1024",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-21T10:00:00"),
-      notes: "Pedido creado",
-    },
-    {
-      id: "3",
-      orderId: "P1024",
-      status: "En proceso",
-      previousStatus: "En cola",
-      user: "J. Operario",
-      timestamp: new Date("2025-06-22T14:30:00"),
-      notes: "Iniciado por operario",
-    },
-    // P1025 - Sandalia C
-    {
-      id: "4",
-      orderId: "P1025",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-22T06:00:00"),
-      notes: "Pedido creado",
-    },
-    {
-      id: "5",
-      orderId: "P1025",
-      status: "En proceso",
-      previousStatus: "En cola",
-      user: "M. Supervisor",
-      timestamp: new Date("2025-06-22T10:15:00"),
-      notes: "Prioridad alta - iniciado por supervisor",
-    },
-    {
-      id: "6",
-      orderId: "P1025",
-      status: "Finalizado",
-      previousStatus: "En proceso",
-      user: "J. Operario",
-      timestamp: new Date("2025-06-22T16:00:00"),
-      notes: "Completado exitosamente",
-    },
-    // P1026 - Zapato D
-    {
-      id: "7",
-      orderId: "P1026",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-22T09:00:00"),
-      notes: "Pedido creado",
-    },
-    // P1027 - Botín E
-    {
-      id: "8",
-      orderId: "P1027",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-21T15:00:00"),
-      notes: "Pedido creado",
-    },
-    {
-      id: "9",
-      orderId: "P1027",
-      status: "En proceso",
-      previousStatus: "En cola",
-      user: "L. Técnico",
-      timestamp: new Date("2025-06-22T13:00:00"),
-      notes: "Iniciado por técnico especializado",
-    },
-    // Cambios adicionales históricos
-    {
-      id: "10",
-      orderId: "P1022",
-      status: "En cola",
-      user: "Sistema",
-      timestamp: new Date("2025-06-21T08:00:00"),
-      notes: "Pedido creado (histórico)",
-    },
-    {
-      id: "11",
-      orderId: "P1022",
-      status: "En proceso",
-      previousStatus: "En cola",
-      user: "J. Operario",
-      timestamp: new Date("2025-06-21T11:30:00"),
-      notes: "Iniciado",
-    },
-    {
-      id: "12",
-      orderId: "P1022",
-      status: "Finalizado",
-      previousStatus: "En proceso",
-      user: "J. Operario",
-      timestamp: new Date("2025-06-21T18:45:00"),
-      notes: "Completado - pedido histórico",
-    },
-  ])
-
-  // Agregar datos de insumos para TODOS los pedidos
-  const [orderSupplies, setOrderSupplies] = useState<OrderSupplies[]>([
-    {
-      orderId: "P1023",
-      supplies: [
-        { id: "1", name: "Goma Vulca", required: 2, available: 15, used: 0, unit: "kg", originalAvailable: 15 },
-        { id: "2", name: "Plantilla", required: 50, available: 200, used: 0, unit: "u", originalAvailable: 200 },
-        { id: "3", name: "Cinta de Tela", required: 8, available: 12, used: 0, unit: "m", originalAvailable: 12 },
-      ],
-    },
-    {
-      orderId: "P1024",
-      supplies: [
-        { id: "4", name: "Cuero Premium", required: 3, available: 10, used: 2.5, unit: "m²", originalAvailable: 10 },
-        { id: "5", name: "Suela Goma", required: 30, available: 80, used: 25, unit: "u", originalAvailable: 80 },
-        { id: "6", name: "Cordones", required: 60, available: 150, used: 30, unit: "u", originalAvailable: 150 },
-      ],
-    },
-    // Agregar datos para P1025
-    {
-      orderId: "P1025",
-      supplies: [
-        { id: "7", name: "Suela Flexible", required: 25, available: 50, used: 0, unit: "u", originalAvailable: 50 },
-        { id: "8", name: "Correa Ajustable", required: 50, available: 100, used: 0, unit: "u", originalAvailable: 100 },
-        { id: "9", name: "Hebilla Metal", required: 25, available: 75, used: 0, unit: "u", originalAvailable: 75 },
-      ],
-    },
-    // Agregar datos para P1026
-    {
-      orderId: "P1026",
-      supplies: [
-        { id: "10", name: "Cuero Sintético", required: 4, available: 20, used: 0, unit: "m²", originalAvailable: 20 },
-        {
-          id: "11",
-          name: "Plantilla Comfort",
-          required: 40,
-          available: 120,
-          used: 0,
-          unit: "u",
-          originalAvailable: 120,
-        },
-        {
-          id: "12",
-          name: "Cordones Deportivos",
-          required: 80,
-          available: 200,
-          used: 0,
-          unit: "u",
-          originalAvailable: 200,
-        },
-      ],
-    },
-    // Agregar datos para P1027
-    {
-      orderId: "P1027",
-      supplies: [
-        {
-          id: "13",
-          name: "Cuero Premium Plus",
-          required: 3.5,
-          available: 8,
-          used: 1.2,
-          unit: "m²",
-          originalAvailable: 8,
-        },
-        {
-          id: "14",
-          name: "Suela Antideslizante",
-          required: 35,
-          available: 90,
-          used: 15,
-          unit: "u",
-          originalAvailable: 90,
-        },
-        { id: "15", name: "Forro Térmico", required: 70, available: 180, used: 35, unit: "u", originalAvailable: 180 },
-      ],
-    },
-  ])
-
+  const [orders, setOrders] = useState<Order[]>([])
+  const [statusHistory, setStatusHistory] = useState<StatusChange[]>([])
+  const [orderSupplies, setOrderSupplies] = useState<OrderSupplies[]>([])
   const [supplyConsumptions, setSupplyConsumptions] = useState<SupplyConsumption[]>([])
+  const [kpis, setKpis] = useState({
+    totalInQueue: 0,
+    inProcess: 0,
+    finishedToday: 0,
+    averageTime: 2.5,
+  })
 
-  const updateOrderStatus = (orderId: string, newStatus: OrderStatus) => {
-    const order = orders.find((o) => o.id === orderId)
-    if (!order) return
+  // Cargar datos iniciales
+  useEffect(() => {
+    refreshData()
+  }, [])
 
-    // Validar transiciones válidas
-    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      "En cola": ["En proceso"],
-      "En proceso": ["Finalizado"],
-      Finalizado: [],
-    }
+  const refreshData = async () => {
+    try {
+      // Cargar pedidos
+      const ordersData = await db.getOrders()
+      const transformedOrders = ordersData.map((order: any) => ({
+        id: order.id,
+        product: order.producto_nombre || order.product || "Producto",
+        quantity: order.cantidad,
+        status: order.estado,
+        priority: order.prioridad,
+        client: order.cliente_nombre || order.client || "Cliente",
+        createdAt: new Date(order.fecha_creacion),
+        updatedAt: new Date(order.fecha_actualizacion),
+        cliente_nombre: order.cliente_nombre,
+        producto_nombre: order.producto_nombre,
+      }))
+      setOrders(transformedOrders)
 
-    if (!validTransitions[order.status].includes(newStatus)) {
-      toast({
-        title: "Error",
-        description: "Transición de estado no válida",
-        variant: "destructive",
+      // Cargar historial completo
+      const historyData = await db.getAllHistory()
+      const transformedHistory = historyData.map((item: any) => ({
+        id: item.id.toString(),
+        orderId: item.orderId,
+        status: item.status,
+        user: item.user || "Usuario",
+        timestamp: new Date(item.timestamp),
+        previousStatus: item.previousStatus,
+        notes: item.notes,
+      }))
+      setStatusHistory(transformedHistory)
+
+      // Cargar KPIs
+      const kpisData = await db.getKPIs()
+      setKpis({
+        totalInQueue: kpisData.totalInQueue || 0,
+        inProcess: kpisData.inProcess || 0,
+        finishedToday: kpisData.finishedToday || 0,
+        averageTime: kpisData.averageTime || 2.5,
       })
-      return
+    } catch (error) {
+      console.error("Error cargando datos:", error)
     }
-
-    const previousStatus = order.status
-
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date() } : o)))
-
-    setStatusHistory((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        orderId,
-        status: newStatus,
-        previousStatus,
-        user: "J. Operario",
-        timestamp: new Date(),
-        notes: `Cambio de ${previousStatus} a ${newStatus}`,
-      },
-    ])
-
-    toast({
-      title: "Estado actualizado",
-      description: `Pedido ${orderId} cambió a ${newStatus}`,
-    })
   }
 
-  const addNewOrder = (orderData: {
+  const loadSuppliesForOrder = async (orderId: string) => {
+    try {
+      const suppliesData = await db.getSupplies(orderId)
+
+      const transformedSupplies: OrderSupplies = {
+        orderId: suppliesData.orderId,
+        supplies: suppliesData.supplies.map((supply: any) => ({
+          id: supply.id.toString(),
+          name: supply.name,
+          required: Number.parseFloat(supply.required),
+          available: Number.parseFloat(supply.available),
+          used: Number.parseFloat(supply.used || 0),
+          unit: supply.unit,
+          originalAvailable: Number.parseFloat(supply.originalAvailable),
+        })),
+      }
+
+      setOrderSupplies((prev) => {
+        const filtered = prev.filter((os) => os.orderId !== orderId)
+        return [...filtered, transformedSupplies]
+      })
+
+      // Cargar historial de consumos
+      const consumptionsData = await db.getSupplyHistory(orderId)
+      const transformedConsumptions = consumptionsData.map((item: any) => ({
+        id: item.id.toString(),
+        orderId: item.orderId,
+        supplyId: item.supplyId.toString(),
+        consumed: Number.parseFloat(item.consumed),
+        timestamp: new Date(item.timestamp),
+        user: item.user || "Usuario",
+        supply_name: item.supply_name,
+        unidad_medida: item.unidad_medida,
+      }))
+
+      setSupplyConsumptions((prev) => {
+        const filtered = prev.filter((sc) => sc.orderId !== orderId)
+        return [...filtered, ...transformedConsumptions]
+      })
+    } catch (error) {
+      console.error("Error cargando insumos:", error)
+    }
+  }
+
+  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+    try {
+      await db.updateOrderStatus(orderId, newStatus)
+
+      // Actualizar estado local
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date() } : o)))
+
+      // Recargar datos para obtener el historial actualizado
+      await refreshData()
+
+      toast({
+        title: "Estado actualizado",
+        description: `Pedido ${orderId} cambió a ${newStatus}`,
+      })
+    } catch (error) {
+      console.error("Error actualizando estado:", error)
+    }
+  }
+
+  const addNewOrder = async (orderData: {
     product: string
     quantity: number
     priority: "Alta" | "Media" | "Baja"
     client: string
     notes?: string
   }) => {
-    // Generar nuevo ID
-    const maxId = Math.max(...orders.map((o) => Number.parseInt(o.id.replace("P", ""))), 1000)
-    const newId = `P${maxId + 1}`
+    try {
+      await db.createOrder(orderData)
+      await refreshData()
 
-    const newOrder: Order = {
-      id: newId,
-      product: orderData.product,
-      quantity: orderData.quantity,
-      status: "En cola",
-      priority: orderData.priority,
-      client: orderData.client,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      toast({
+        title: "Pedido creado",
+        description: "Pedido creado exitosamente",
+      })
+    } catch (error) {
+      console.error("Error creando pedido:", error)
     }
-
-    // Agregar el pedido
-    setOrders((prev) => [...prev, newOrder])
-
-    // Agregar al historial
-    setStatusHistory((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        orderId: newId,
-        status: "En cola",
-        user: "Sistema",
-        timestamp: new Date(),
-        notes: orderData.notes ? `Pedido creado - ${orderData.notes}` : "Pedido creado",
-      },
-    ])
-
-    // Generar insumos automáticamente basados en el tipo de producto
-    const generateSupplies = (product: string, quantity: number): Supply[] => {
-      const baseSupplies = [
-        { name: "Cuero Base", required: quantity * 0.08, available: 50, unit: "m²" },
-        { name: "Plantilla Estándar", required: quantity, available: 300, unit: "u" },
-        { name: "Suela Básica", required: quantity, available: 200, unit: "u" },
-      ]
-
-      if (product.toLowerCase().includes("zapato")) {
-        baseSupplies.push({ name: "Cordones", required: quantity * 2, available: 400, unit: "u" })
-      } else if (product.toLowerCase().includes("botín")) {
-        baseSupplies.push({ name: "Forro Interno", required: quantity, available: 150, unit: "u" })
-      } else if (product.toLowerCase().includes("sandalia")) {
-        baseSupplies.push({ name: "Correa Ajustable", required: quantity * 2, available: 200, unit: "u" })
-      }
-
-      return baseSupplies.map((supply, index) => ({
-        id: `${Date.now()}_${index}`,
-        name: supply.name,
-        required: supply.required,
-        available: supply.available,
-        used: 0,
-        unit: supply.unit,
-        originalAvailable: supply.available,
-      }))
-    }
-
-    // Agregar insumos para el nuevo pedido
-    const newSupplies: OrderSupplies = {
-      orderId: newId,
-      supplies: generateSupplies(orderData.product, orderData.quantity),
-    }
-
-    setOrderSupplies((prev) => [...prev, newSupplies])
-
-    toast({
-      title: "Pedido creado",
-      description: `Pedido ${newId} creado exitosamente`,
-    })
   }
 
   const updateSupplyUsage = (orderId: string, supplyId: string, used: number) => {
@@ -462,62 +247,39 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
     )
   }
 
-  const saveSupplyUsage = (orderId: string) => {
-    const orderSupply = orderSupplies.find((os) => os.orderId === orderId)
-    if (!orderSupply) return
+  const saveSupplyUsage = async (orderId: string) => {
+    try {
+      const orderSupply = orderSupplies.find((os) => os.orderId === orderId)
+      if (!orderSupply) return
 
-    const hasExcess = orderSupply.supplies.some((s) => s.used > s.available)
-    if (hasExcess) {
+      const consumptions = orderSupply.supplies
+        .filter((s) => s.used > 0)
+        .map((s) => ({
+          supplyId: Number.parseInt(s.id),
+          quantity: s.used,
+        }))
+
+      if (consumptions.length === 0) {
+        toast({
+          title: "Sin cambios",
+          description: "No se registraron consumos para guardar",
+          variant: "destructive",
+        })
+        return
+      }
+
+      await db.consumeSupplies(orderId, consumptions)
+
+      // Recargar insumos para este pedido
+      await loadSuppliesForOrder(orderId)
+
       toast({
-        title: "Error de stock",
-        description: "No se puede usar más cantidad de la disponible",
-        variant: "destructive",
+        title: "Consumos guardados",
+        description: `Se registraron los consumos para el pedido ${orderId}`,
       })
-      return
+    } catch (error) {
+      console.error("Error guardando consumos:", error)
     }
-
-    const hasUsage = orderSupply.supplies.some((s) => s.used > 0)
-    if (!hasUsage) {
-      toast({
-        title: "Sin cambios",
-        description: "No se registraron consumos para guardar",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setOrderSupplies((prev) =>
-      prev.map((os) =>
-        os.orderId === orderId
-          ? {
-              ...os,
-              supplies: os.supplies.map((s) => ({
-                ...s,
-                available: s.available - s.used,
-                used: 0,
-              })),
-            }
-          : os,
-      ),
-    )
-
-    const newConsumptions = orderSupply.supplies
-      .filter((s) => s.used > 0)
-      .map((s) => ({
-        id: Date.now().toString() + s.id,
-        orderId,
-        supplyId: s.id,
-        consumed: s.used,
-        timestamp: new Date(),
-        user: "J. Operario",
-      }))
-
-    setSupplyConsumptions((prev) => [...prev, ...newConsumptions])
-
-    toast({
-      title: "Consumos guardados",
-      description: `Se registraron los consumos para el pedido ${orderId} y se actualizó el inventario`,
-    })
   }
 
   const getSupplyConsumptions = (orderId: string) => {
@@ -534,17 +296,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
     return statusHistory.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
   }
 
-  const getKPIs = () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    return {
-      totalInQueue: orders.filter((o) => o.status === "En cola").length,
-      inProcess: orders.filter((o) => o.status === "En proceso").reduce((acc, o) => acc + o.quantity, 0),
-      finishedToday: orders.filter((o) => o.status === "Finalizado" && o.updatedAt >= today).length,
-      averageTime: 2.5,
-    }
-  }
+  const getKPIs = () => kpis
 
   return (
     <ProductionContext.Provider
@@ -553,6 +305,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
         statusHistory,
         orderSupplies,
         supplyConsumptions,
+        loading: db.loading,
         updateOrderStatus,
         updateSupplyUsage,
         saveSupplyUsage,
@@ -561,6 +314,8 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
         getOrderStatusHistory,
         getAllStatusHistory,
         getKPIs,
+        refreshData,
+        loadSuppliesForOrder,
       }}
     >
       {children}
