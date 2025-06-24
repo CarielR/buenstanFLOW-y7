@@ -9,15 +9,30 @@ export function useDatabase() {
   const [loading, setLoading] = useState(false)
 
   const apiCall = async (url: string, options: RequestInit = {}) => {
+    // Evitar múltiples llamadas simultáneas a la misma URL
+    if (loading) {
+      throw new Error("Operación en progreso")
+    }
+
     setLoading(true)
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
+
       const response = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
           ...options.headers,
         },
+        signal: controller.signal,
         ...options,
       })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
       const data = await response.json()
 
@@ -27,9 +42,13 @@ export function useDatabase() {
 
       return data.data
     } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("Tiempo de espera agotado")
+      }
+
       console.error("Error en API call:", error)
       toast({
-        title: "Error",
+        title: "Error de conexión",
         description: error instanceof Error ? error.message : "Error desconocido",
         variant: "destructive",
       })

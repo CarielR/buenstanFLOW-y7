@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { useDatabase } from "@/hooks/use-database"
 
@@ -107,7 +107,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
     refreshData()
   }, [])
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     try {
       // Cargar pedidos
       const ordersData = await db.getOrders()
@@ -149,51 +149,58 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
     } catch (error) {
       console.error("Error cargando datos:", error)
     }
-  }
+  }, [db])
 
-  const loadSuppliesForOrder = async (orderId: string) => {
-    try {
-      const suppliesData = await db.getSupplies(orderId)
+  const loadSuppliesForOrderMemo = useCallback(
+    async (orderId: string) => {
+      if (!orderId) return
 
-      const transformedSupplies: OrderSupplies = {
-        orderId: suppliesData.orderId,
-        supplies: suppliesData.supplies.map((supply: any) => ({
-          id: supply.id.toString(),
-          name: supply.name,
-          required: Number.parseFloat(supply.required),
-          available: Number.parseFloat(supply.available),
-          used: Number.parseFloat(supply.used || 0),
-          unit: supply.unit,
-          originalAvailable: Number.parseFloat(supply.originalAvailable),
-        })),
+      try {
+        const suppliesData = await db.getSupplies(orderId)
+
+        const transformedSupplies: OrderSupplies = {
+          orderId: suppliesData.orderId,
+          supplies: suppliesData.supplies.map((supply: any) => ({
+            id: supply.id.toString(),
+            name: supply.name,
+            required: Number.parseFloat(supply.required),
+            available: Number.parseFloat(supply.available),
+            used: Number.parseFloat(supply.used || 0),
+            unit: supply.unit,
+            originalAvailable: Number.parseFloat(supply.originalAvailable),
+          })),
+        }
+
+        setOrderSupplies((prev) => {
+          const filtered = prev.filter((os) => os.orderId !== orderId)
+          return [...filtered, transformedSupplies]
+        })
+
+        // Cargar historial de consumos
+        const consumptionsData = await db.getSupplyHistory(orderId)
+        const transformedConsumptions = consumptionsData.map((item: any) => ({
+          id: item.id.toString(),
+          orderId: item.orderId,
+          supplyId: item.supplyId.toString(),
+          consumed: Number.parseFloat(item.consumed),
+          timestamp: new Date(item.timestamp),
+          user: item.user || "Usuario",
+          supply_name: item.supply_name,
+          unidad_medida: item.unidad_medida,
+        }))
+
+        setSupplyConsumptions((prev) => {
+          const filtered = prev.filter((sc) => sc.orderId !== orderId)
+          return [...filtered, ...transformedConsumptions]
+        })
+      } catch (error) {
+        console.error("Error cargando insumos:", error)
       }
+    },
+    [db],
+  )
 
-      setOrderSupplies((prev) => {
-        const filtered = prev.filter((os) => os.orderId !== orderId)
-        return [...filtered, transformedSupplies]
-      })
-
-      // Cargar historial de consumos
-      const consumptionsData = await db.getSupplyHistory(orderId)
-      const transformedConsumptions = consumptionsData.map((item: any) => ({
-        id: item.id.toString(),
-        orderId: item.orderId,
-        supplyId: item.supplyId.toString(),
-        consumed: Number.parseFloat(item.consumed),
-        timestamp: new Date(item.timestamp),
-        user: item.user || "Usuario",
-        supply_name: item.supply_name,
-        unidad_medida: item.unidad_medida,
-      }))
-
-      setSupplyConsumptions((prev) => {
-        const filtered = prev.filter((sc) => sc.orderId !== orderId)
-        return [...filtered, ...transformedConsumptions]
-      })
-    } catch (error) {
-      console.error("Error cargando insumos:", error)
-    }
-  }
+  const loadSuppliesForOrder = loadSuppliesForOrderMemo
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {

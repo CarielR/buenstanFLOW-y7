@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useProduction } from "@/components/production-context"
 import { Button } from "@/components/ui/button"
@@ -35,19 +35,32 @@ export default function ProduccionPage() {
   const [selectedOrderId, setSelectedOrderId] = useState("")
   const [showHistory, setShowHistory] = useState(false)
 
+  const handleOrderChange = useCallback((newOrderId: string) => {
+    setSelectedOrderId(newOrderId)
+    // No llamar loadSuppliesForOrder aquí, el useEffect se encargará
+  }, [])
+
   // Establecer el primer pedido como seleccionado cuando se cargan los datos
   useEffect(() => {
     if (orders.length > 0 && !selectedOrderId) {
       setSelectedOrderId(orders[0].id)
     }
-  }, [orders, selectedOrderId])
+  }, [orders.length]) // Solo depende de la longitud del array
 
-  // Cargar insumos cuando cambia el pedido seleccionado
+  // Cargar insumos cuando cambia el pedido seleccionado - con debounce
   useEffect(() => {
-    if (selectedOrderId) {
+    if (!selectedOrderId) return
+
+    // Verificar si ya tenemos los insumos cargados para este pedido
+    const existingSupplies = orderSupplies.find((os) => os.orderId === selectedOrderId)
+    if (existingSupplies) return // No recargar si ya existen
+
+    const timeoutId = setTimeout(() => {
       loadSuppliesForOrder(selectedOrderId)
-    }
-  }, [selectedOrderId, loadSuppliesForOrder])
+    }, 100) // Pequeño debounce para evitar llamadas múltiples
+
+    return () => clearTimeout(timeoutId)
+  }, [selectedOrderId]) // Solo depende del ID seleccionado
 
   const selectedOrder = orders.find((o) => o.id === selectedOrderId)
   const selectedSupplies = orderSupplies.find((os) => os.orderId === selectedOrderId)
@@ -154,7 +167,7 @@ export default function ProduccionPage() {
               <CardTitle className="text-base sm:text-lg">Selector de Pedido</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedOrderId} onValueChange={setSelectedOrderId} disabled={loading}>
+              <Select value={selectedOrderId} onValueChange={handleOrderChange} disabled={loading}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
