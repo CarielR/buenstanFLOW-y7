@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import mysql from "mysql2/promise"
 import { dbConfig } from "@/lib/database"
+import { authenticateRequest, requirePermissions, logAuditAction } from "@/lib/auth-middleware"
 
 // Crear conexión a la base de datos
 async function getConnection() {
@@ -22,6 +23,17 @@ async function getConnection() {
 
 // GET - Obtener todos los pedidos
 export async function GET(request: NextRequest) {
+  // Autenticar usuario
+  const { user, permissions, error } = await authenticateRequest(request)
+
+  if (error || !user) {
+    return NextResponse.json({ success: false, error: error || "No autenticado" }, { status: 401 })
+  }
+
+  // Verificar permisos
+  const permissionCheck = await requirePermissions(["pedidos.leer"])(request, user, permissions)
+  if (permissionCheck) return permissionCheck
+
   try {
     const connection = await getConnection()
 
@@ -55,6 +67,18 @@ export async function GET(request: NextRequest) {
 
     await connection.end()
 
+    // Registrar auditoría
+    await logAuditAction(
+      user.userId,
+      "consultar_pedidos",
+      "pedidos",
+      "Consulta de lista de pedidos",
+      null,
+      { total_pedidos: (rows as any[]).length },
+      request.ip,
+      request.headers.get("user-agent") || undefined,
+    )
+
     return NextResponse.json({ success: true, data: rows })
   } catch (error) {
     console.error("Error obteniendo pedidos:", error)
@@ -64,6 +88,17 @@ export async function GET(request: NextRequest) {
 
 // POST - Crear nuevo pedido
 export async function POST(request: NextRequest) {
+  // Autenticar usuario
+  const { user, permissions, error } = await authenticateRequest(request)
+
+  if (error || !user) {
+    return NextResponse.json({ success: false, error: error || "No autenticado" }, { status: 401 })
+  }
+
+  // Verificar permisos
+  const permissionCheck = await requirePermissions(["pedidos.crear"])(request, user, permissions)
+  if (permissionCheck) return permissionCheck
+
   let connection
   try {
     const body = await request.json()

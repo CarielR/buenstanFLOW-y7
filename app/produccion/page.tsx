@@ -20,6 +20,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { ChevronLeft, ChevronRight, History, Loader2, Lock, AlertTriangle } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"
 
 export default function ProduccionPage() {
   const {
@@ -138,7 +139,7 @@ export default function ProduccionPage() {
   }
 
   return (
-    <>
+    <ProtectedRoute requiredPermissions={["produccion.leer", "produccion.consumir_insumos"]}>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -494,6 +495,6 @@ export default function ProduccionPage() {
           )}
         </div>
       </SidebarInset>
-    </>
+    </ProtectedRoute>
   )
 }

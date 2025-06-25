@@ -36,6 +36,7 @@ import {
   Search,
   Users,
 } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"
 
 export default function PanelPage() {
   const { orders, updateOrderStatus, addNewOrder, getKPIs } = useProduction()
@@ -239,7 +240,7 @@ export default function PanelPage() {
   }
 
   return (
-    <>
+    <ProtectedRoute requiredPermissions={["pedidos.leer"]}>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -724,6 +725,6 @@ export default function PanelPage() {
           </Card>
         </div>
       </SidebarInset>
-    </>
+    </ProtectedRoute>
   )
 }

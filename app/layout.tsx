@@ -5,13 +5,14 @@ import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import { ProductionProvider } from "@/components/production-context"
 import { SidebarProvider } from "@/components/ui/sidebar"
+import { AuthProvider } from "@/components/auth-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Sistema de Producción - BUESTANFLOW",
   description: "Panel de control para gestión de pedidos y producción",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -22,12 +23,14 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
-        <ProductionProvider>
-          <SidebarProvider>
-            {children}
-            <Toaster />
-          </SidebarProvider>
-        </ProductionProvider>
+        <AuthProvider>
+          <ProductionProvider>
+            <SidebarProvider>
+              {children}
+              <Toaster />
+            </SidebarProvider>
+          </ProductionProvider>
+        </AuthProvider>
       </body>
     </html>
   )

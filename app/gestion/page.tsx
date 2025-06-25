@@ -20,6 +20,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { ChevronLeft, ChevronRight, Clock, User, Calendar, FileText, Eye, EyeOff } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"
 
 export default function GestionPage() {
   const { orders, updateOrderStatus, getOrderStatusHistory, getAllStatusHistory } = useProduction()
@@ -129,7 +130,7 @@ export default function GestionPage() {
   }
 
   return (
-    <>
+    <ProtectedRoute requiredPermissions={["pedidos.leer", "pedidos.cambiar_estado"]}>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -469,6 +470,6 @@ export default function GestionPage() {
           </Card>
         </div>
       </SidebarInset>
-    </>
+    </ProtectedRoute>
   )
 }

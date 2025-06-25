@@ -1,116 +1,82 @@
 "use client"
 
-import type * as React from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, Factory, HelpCircle, User } from "lucide-react"
+import type React from "react"
 
+import { Sidebar, SidebarFooter, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar"
+import { useAuth } from "./auth-context"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-} from "@/components/ui/sidebar"
-
-// Navigation items
-const items = [
-  {
-    title: "Panel",
-    url: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Gestión",
-    url: "/gestion",
-    icon: Settings,
-  },
-  {
-    title: "Producción",
-    url: "/produccion",
-    icon: Factory,
-  },
-]
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ChevronsUpDown, LogOut, Settings, Sparkles } from "lucide-react"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname()
+  const { user, logout } = useAuth()
 
   return (
-    <Sidebar variant="inset" {...props}>
-      <SidebarHeader>
-        <div className="flex items-center justify-center h-16 px-4 bg-gray-900 rounded-lg transition-all duration-300 hover:bg-gray-800 hover:shadow-lg">
-          <h1 className="text-white font-bold text-lg tracking-wide">BUESTANFLOW</h1>
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navegación</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link
-                      href={item.url}
-                      className={`
-                        flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200
-                        hover:bg-gray-100
-                        ${
-                          pathname === item.url
-                            ? "bg-blue-50 border-l-4 border-blue-500 text-blue-700 font-semibold"
-                            : "hover:text-gray-900"
-                        }
-                      `}
-                    >
-                      <item.icon
-                        className={`
-                        h-5 w-5 transition-colors duration-200
-                        ${pathname === item.url ? "text-blue-600" : "hover:text-blue-600"}
-                      `}
-                      />
-                      <span className="font-medium">{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+    <Sidebar collapsible="icon" {...props}>
+      {/* ... contenido existente ... */}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Ayuda</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton className="transition-colors duration-200 hover:bg-gray-100">
-                  <HelpCircle className="h-5 w-5" />
-                  <span className="font-medium">Soporte</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="transition-colors duration-200 hover:bg-gray-100">
-              <User className="h-5 w-5" />
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">J. Operario</span>
-                <span className="truncate text-xs text-gray-500">Usuario</span>
-              </div>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarFallback className="rounded-lg">{user?.nombre?.charAt(0) || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{user?.nombre || "Usuario"}</span>
+                    <span className="truncate text-xs">{user?.rol_nombre || "Sin rol"}</span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="bottom"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg">{user?.nombre?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">{user?.nombre}</span>
+                      <span className="truncate text-xs">{user?.email}</span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Sparkles />
+                  Mi Perfil
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings />
+                  Configuración
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut />
+                  Cerrar Sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   )
 }
