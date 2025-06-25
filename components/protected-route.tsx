@@ -1,19 +1,18 @@
+// components/protected-route.tsx
 "use client"
 
-import type React from "react"
-
+import React, { ReactNode, useEffect } from "react"
 import { useAuth } from "./auth-context"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 import { Loader2, AlertTriangle } from "lucide-react"
 import { Card, CardContent } from "./ui/card"
 import { Button } from "./ui/button"
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
+  children: ReactNode
   requiredPermissions?: string[]
-  requireAny?: boolean // Si true, requiere cualquiera de los permisos. Si false, requiere todos
-  fallback?: React.ReactNode
+  requireAny?: boolean // Si true, requiere cualquiera; si false, requiere todos
+  fallback?: ReactNode
 }
 
 export function ProtectedRoute({
@@ -22,16 +21,16 @@ export function ProtectedRoute({
   requireAny = false,
   fallback,
 }: ProtectedRouteProps) {
-  const { user, permissions, loading, logout } = useAuth()
+  const { user, permissions = [], loading, logout } = useAuth()
   const router = useRouter()
 
+  // Si no hay usuario, redirige al login
   useEffect(() => {
     if (!loading && !user) {
       router.push("/auth/login")
     }
   }, [user, loading, router])
 
-  // Mostrar loading mientras se verifica la autenticación
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -43,22 +42,22 @@ export function ProtectedRoute({
     )
   }
 
-  // Si no hay usuario, no mostrar nada (se redirigirá al login)
   if (!user) {
     return null
   }
 
-  // Verificar permisos si se especificaron
   if (requiredPermissions.length > 0) {
+    // Aseguramos que `permissions` es siempre un array
+    const perms: string[] = (permissions || []).map((p) => p.nombre)
+
     const hasPermission = requireAny
-      ? requiredPermissions.some((permission) => permissions.some((p) => p.nombre === permission))
-      : requiredPermissions.every((permission) => permissions.some((p) => p.nombre === permission))
+      ? requiredPermissions.some((req) => perms.includes(req))
+      : requiredPermissions.every((req) => perms.includes(req))
 
     if (!hasPermission) {
       if (fallback) {
         return <>{fallback}</>
       }
-
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
           <Card className="max-w-md w-full">
@@ -72,7 +71,9 @@ export function ProtectedRoute({
                   <p className="text-sm text-gray-600 mt-2">
                     No tienes permisos suficientes para acceder a esta página.
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">Permisos requeridos: {requiredPermissions.join(", ")}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Permisos requeridos: {requiredPermissions.join(", ")}
+                  </p>
                 </div>
                 <div className="flex gap-2 justify-center">
                   <Button variant="outline" onClick={() => router.back()}>

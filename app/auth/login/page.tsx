@@ -1,7 +1,7 @@
+// app/auth/login/page.tsx
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-context"
@@ -34,12 +34,32 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
+    console.log("⏳ Iniciando fetch /api/auth/login con", { email, password })
+
     try {
-      const success = await login(email, password)
-      if (!success) {
-        setError("Credenciales inválidas")
+      // 1) Hacer fetch directo al login
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // ¡muy importante!
+        body: JSON.stringify({ email, password }),
+      })
+
+      console.log("✅ Respuesta login:", res.status, {
+        setCookie: res.headers.get("set-cookie"),
+      })
+
+      const data = await res.json()
+      console.log("📦 Body login:", data)
+
+      if (!res.ok || !data.success) {
+        setError(data.error || "Credenciales inválidas")
+      } else {
+        // 2) Opcional: actualizar contexto y redirigir
+        await login(email, password)
       }
-    } catch (error) {
+    } catch (err) {
+      console.error("❌ Error en handleSubmit:", err)
       setError("Error de conexión")
     } finally {
       setIsLoading(false)
@@ -119,7 +139,11 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-gray-800 hover:bg-gray-700" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full bg-gray-800 hover:bg-gray-700"
+                disabled={isLoading}
+              >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Iniciar Sesión
               </Button>

@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
 import { cookies } from "next/headers"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production"
+const JWT_SECRET = process.env.JWT_SECRET || "9f2b4c7d6a1e3f8c5b0d2e7a4c9f8b1d3a6c0e9f4b2d7a1c8f3e6b0a5d9c7e2"
 const JWT_EXPIRES_IN = "24h"
 const COOKIE_NAME = "auth-token"
 

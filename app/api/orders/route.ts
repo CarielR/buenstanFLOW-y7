@@ -1,3 +1,6 @@
+
+
+// C:\Users\Asus\Documents\GitHub\buenstanFLOW-y7\app\api\orders\route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import mysql from "mysql2/promise"
 import { dbConfig } from "@/lib/database"

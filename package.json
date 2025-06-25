@@ -43,7 +43,7 @@
     "cmdk": "latest",
     "embla-carousel-react": "latest",
     "input-otp": "latest",
-    "jsonwebtoken": "latest",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.454.0",
     "mysql2": "latest",
     "next": "14.2.16",
@@ -62,6 +62,7 @@
     "vaul": "latest"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",

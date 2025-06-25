@@ -154,7 +154,7 @@ export function ProductionProvider({ children }: { children: React.ReactNode }) 
       console.error("Error cargando datos:", error)
       toast({
         title: "Error de conexión",
-        description: "No se pudieron cargar los datos del sistema",
+        description: "No se pudieron kpi",
         variant: "destructive",
       })
     }
